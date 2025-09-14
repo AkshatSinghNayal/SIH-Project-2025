@@ -1,0 +1,9 @@
+/* Tailwind is loaded via CDN in index.html; keep file to satisfy Vite dev server and allow custom overrides later */
+:root {
+  color-scheme: dark;
+}
+
+/* Example tweak: ensure body takes full height */
+html, body, #root {
+  height: 100%;
+}
