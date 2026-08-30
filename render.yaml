@@ -32,11 +32,12 @@ services:
       - key: COOKIE_SECURE
         value: "true"
 
-  - type: static
+  - type: web
     name: sih-frontend
+    env: static
     rootDir: SIH-Chat-Bot
     buildCommand: npm install && npm run build
-    publishPath: dist
+    staticPublishPath: dist
     envVars:
       - key: VITE_USE_REMOTE_API
         value: "true"
