@@ -1,0 +1,5 @@
+{
+  "name": "Student Support Chatbot",
+  "description": "A supportive chatbot designed to provide guidance and assistance to students facing anxiety and depression. It offers a safe space to chat, with conversations powered by the Gemini API.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  @apply bg-canvas text-ink-900 font-sans antialiased;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* Every interactive element gets a calm, visible focus ring (sage-700, 2px) */
+:focus-visible {
+  outline: 2px solid #4e6b5b;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: #e3ebe4;
+  color: #2b332c;
+}
+
+/* Soft, color-tinted scrollbars instead of default greys */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbdad0 transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #cbdad0;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer components {
+  .card-organic {
+    @apply bg-surface rounded-organic shadow-soft border border-line-200;
+  }
+  .card-soft {
+    @apply bg-surface rounded-soft shadow-soft border border-line-200;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-3 rounded-soft bg-sage-500 text-white font-medium
+      transition-colors duration-200 hover:bg-sage-700 active:bg-sage-700
+      disabled:opacity-60 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-3 rounded-soft bg-sage-100 text-sage-700 font-medium
+      transition-colors duration-200 hover:bg-sage-200 active:bg-sage-200
+      disabled:opacity-60 disabled:cursor-not-allowed;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-soft text-ink-600 font-medium
+      transition-colors duration-200 hover:bg-sage-50 hover:text-ink-900;
+  }
+  .input-calm {
+    @apply w-full px-4 py-3 rounded-soft bg-surface border border-line-200 text-ink-900 placeholder:text-ink-600/60
+      transition-shadow duration-200 focus:outline-none focus:ring-2 focus:ring-sage-700/60;
+  }
+  .chip {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-full border border-line-200 bg-surface text-ink-900 text-sm
+      transition-colors duration-200 hover:border-sage-500 hover:bg-sage-50;
+  }
+  .label-calm {
+    @apply block text-sm font-medium text-ink-600 mb-1.5;
+  }
+}
+
+/* The breathing circle pauses into a still, complete state — never a frozen mid-pulse frame */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

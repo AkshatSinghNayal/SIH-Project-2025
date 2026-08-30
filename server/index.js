@@ -1,0 +1,442 @@
+import 'dotenv/config';
+import http from 'node:http';
+import { randomUUID } from 'node:crypto';
+import express from 'express';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import { WebSocketServer, WebSocket } from 'ws';
+import { GoogleGenAI } from '@google/genai';
+import { connectMongo } from './db.js';
+import { Chat, Message } from './models.js';
+import { SYSTEM_INSTRUCTION } from './systemPrompt.js';
+import communityRouter from './community.js';
+import authRouter, { requireAuth, requireCsrf } from './auth.js';
+
+const app = express();
+const PORT = process.env.PORT || 8787;
+
+if (process.env.NODE_ENV === 'production') {
+  const missingEnvs = [];
+  if (!process.env.MONGODB_URI) missingEnvs.push('MONGODB_URI');
+  if (!process.env.JWT_SECRET) missingEnvs.push('JWT_SECRET');
+  if (!process.env.COMMUNITY_SESSION_SECRET) missingEnvs.push('COMMUNITY_SESSION_SECRET');
+  if (missingEnvs.length > 0) {
+    console.error(`FATAL: Missing required production environment variables: ${missingEnvs.join(', ')}`);
+    process.exit(1);
+  }
+}
+
+app.set('trust proxy', 1);
+
+const corsEnv = process.env.CORS_ORIGIN || 'http://localhost:5173';
+const corsOrigins = corsEnv.trim() === '*'
+  ? true
+  : corsEnv.split(',').map(s => s.trim()).filter(Boolean);
+
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+app.use(cors({ origin: corsOrigins, credentials: true }));
+app.use(cookieParser());
+app.use(express.json({ limit: '1mb' }));
+
+app.use('/api/auth', authRouter);
+app.use('/api/community', communityRouter);
+
+app.get('/health', (_req, res) => res.json({ ok: true }));
+
+const ai = process.env.GEMINI_API_KEY
+  ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+  : null;
+if (process.env.MONGODB_URI) {
+  connectMongo(process.env.MONGODB_URI).catch(err => {
+    console.error('Mongo connection failed:', err.message);
+  });
+}
+
+// POST /api/chat/stream { model?, history: [{role,text}], message: string, chatId?: string }
+app.post('/api/chat/stream', requireAuth, requireCsrf, async (req, res) => {
+  try {
+    if (!ai) return res.status(503).json({ error: 'Gemini is not configured' });
+    const { model = 'gemini-2.5-flash', history = [], message, chatId } = req.body || {};
+    const userId = req.user.id;
+
+    if (typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ error: 'message is required' });
+    }
+
+    if (chatId && process.env.MONGODB_URI) {
+      const existingChat = await Chat.findOne({ _id: chatId, userId });
+      if (!existingChat) {
+        return res.status(404).json({ error: 'Chat conversation not found' });
+      }
+    }
+
+    // curate history to start with a user message and ensure correct format
+    const curated = Array.isArray(history) ? history.filter(h => h && typeof h.text === 'string' && (h.role === 'user' || h.role === 'model')) : [];
+    let start = 0;
+    while (start < curated.length && curated[start].role === 'model') start++;
+    const prior = start > 0 ? curated.slice(start) : curated;
+
+    const chat = ai.chats.create({
+      model,
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+      },
+      history: prior.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
+    });
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const stream = await chat.sendMessageStream({ message });
+    for await (const chunk of stream) {
+      const text = chunk?.text ?? '';
+      if (text) {
+        res.write(`data: ${JSON.stringify({ text })}\n\n`);
+      }
+    }
+    res.end();
+
+    // Persist messages if Mongo is connected and chat context provided
+    if (process.env.MONGODB_URI && userId && chatId) {
+      try {
+        const now = Date.now();
+        await Message.create({ chatId, role: 'user', text: message, timestamp: now });
+        // Last chunk already streamed; fetch curated history from chat and save the model message end state
+        const hist = chat.getHistory(true);
+        const last = hist[hist.length - 1];
+        const botText = last?.parts?.map(p => p.text).join('') || '';
+        if (botText) await Message.create({ chatId, role: 'model', text: botText, timestamp: Date.now() });
+      } catch (err) {
+        console.error('Persist stream messages failed:', err?.message);
+      }
+    }
+  } catch (e) {
+    console.error('Streaming error:', e?.status, e?.message);
+    if (!res.headersSent) res.status(500).json({ error: 'stream failed' });
+    else res.end();
+  }
+});
+
+// Create a chat
+app.post('/api/chats', requireAuth, requireCsrf, async (req, res) => {
+  try {
+    const { title } = req.body || {};
+    const userId = req.user.id;
+    if (!process.env.MONGODB_URI) return res.status(501).json({ error: 'db disabled' });
+    if (!title) return res.status(400).json({ error: 'title required' });
+    const chat = await Chat.create({ userId, title });
+    res.json(chat);
+  } catch (e) { res.status(500).json({ error: 'create failed' }); }
+});
+
+// List chats for authenticated user
+app.get('/api/chats', requireAuth, async (req, res) => {
+  try {
+    if (!process.env.MONGODB_URI) return res.json([]);
+    const userId = req.user.id;
+    const chats = await Chat.find({ userId }).sort({ createdAt: -1 });
+    res.json(chats);
+  } catch (e) { res.status(500).json({ error: 'list failed' }); }
+});
+
+// List chats with parameter (ownership check)
+app.get('/api/chats/:userId', requireAuth, async (req, res) => {
+  try {
+    if (req.user.id !== req.params.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    if (!process.env.MONGODB_URI) return res.json([]);
+    const chats = await Chat.find({ userId: req.user.id }).sort({ createdAt: -1 });
+    res.json(chats);
+  } catch (e) { res.status(500).json({ error: 'list failed' }); }
+});
+
+// Delete chat and its messages (ownership check)
+app.delete('/api/chats/:chatId', requireAuth, requireCsrf, async (req, res) => {
+  try {
+    if (!process.env.MONGODB_URI) return res.status(501).json({ error: 'db disabled' });
+    const { chatId } = req.params;
+    const userId = req.user.id;
+    const chat = await Chat.findOne({ _id: chatId, userId });
+    if (!chat) return res.status(404).json({ error: 'Chat not found' });
+
+    await Message.deleteMany({ chatId });
+    await Chat.deleteOne({ _id: chatId });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'delete failed' }); }
+});
+
+// Get messages for a chat (ownership check)
+app.get('/api/messages/:chatId', requireAuth, async (req, res) => {
+  try {
+    if (!process.env.MONGODB_URI) return res.json([]);
+    const { chatId } = req.params;
+    const userId = req.user.id;
+    const chat = await Chat.findOne({ _id: chatId, userId });
+    if (!chat) return res.status(404).json({ error: 'Chat not found' });
+
+    const msgs = await Message.find({ chatId }).sort({ timestamp: 1 });
+    res.json(msgs);
+  } catch (e) { res.status(500).json({ error: 'messages failed' }); }
+});
+
+const server = http.createServer(app);
+
+/* ------------------------------------------------------------------ */
+/* Ephemeral anonymous peer room                                      */
+/* ------------------------------------------------------------------ */
+
+const peerServer = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 });
+const participants = new Map();
+const connectionsByIp = new Map();
+const MAX_CONNECTIONS_PER_IP = 10;
+const MESSAGE_LIMIT = 1000;
+
+const cleanText = (value, max) =>
+  typeof value === 'string' ? value.replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, max) : '';
+
+const sendJson = (socket, payload) => {
+  if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(payload));
+};
+
+const broadcastPresence = () => {
+  const online = participants.size;
+  const waiting = [...participants.values()].filter(participant => !participant.partner).length;
+  for (const [socket, participant] of participants) {
+    sendJson(socket, {
+      type: 'presence',
+      online,
+      others: Math.max(0, online - 1),
+      matched: !!participant.partner,
+      waiting,
+    });
+  }
+};
+
+const matchWaitingParticipants = () => {
+  const waiting = [...participants.entries()].filter(([socket, participant]) =>
+    !participant.partner && socket.readyState === WebSocket.OPEN
+  );
+
+  // Fisher-Yates keeps allocation random without sorting on an unstable comparator.
+  for (let index = waiting.length - 1; index > 0; index--) {
+    const swapWith = Math.floor(Math.random() * (index + 1));
+    [waiting[index], waiting[swapWith]] = [waiting[swapWith], waiting[index]];
+  }
+
+  while (waiting.length > 1) {
+    const [firstSocket, first] = waiting.shift();
+    const candidateIndex = waiting.findIndex(([, candidate]) =>
+      candidate.id !== first.lastPartnerId && first.id !== candidate.lastPartnerId
+    );
+    if (candidateIndex === -1) continue;
+
+    const [[secondSocket, second]] = waiting.splice(candidateIndex, 1);
+    first.partner = secondSocket;
+    second.partner = firstSocket;
+    first.lastPartnerId = second.id;
+    second.lastPartnerId = first.id;
+    sendJson(firstSocket, {
+      type: 'matched',
+      peer: { nickname: second.nickname, colorFrom: second.colorFrom, colorTo: second.colorTo },
+    });
+    sendJson(secondSocket, {
+      type: 'matched',
+      peer: { nickname: first.nickname, colorFrom: first.colorFrom, colorTo: first.colorTo },
+    });
+  }
+  broadcastPresence();
+};
+
+const returnToMatching = (socket, reason) => {
+  const participant = participants.get(socket);
+  if (!participant) return;
+  const partnerSocket = participant.partner;
+  participant.partner = null;
+  sendJson(socket, { type: 'searching', reason });
+
+  if (partnerSocket) {
+    const partner = participants.get(partnerSocket);
+    if (partner) {
+      partner.partner = null;
+      sendJson(partnerSocket, { type: 'peer_left', reason });
+      sendJson(partnerSocket, { type: 'searching', reason: 'peer_left' });
+    }
+  }
+  matchWaitingParticipants();
+};
+
+const removeParticipant = socket => {
+  const participant = participants.get(socket);
+  if (!participant) return;
+  const partnerSocket = participant.partner;
+  participants.delete(socket);
+  const nextIpCount = Math.max(0, (connectionsByIp.get(participant.ip) || 1) - 1);
+  if (nextIpCount === 0) connectionsByIp.delete(participant.ip);
+  else connectionsByIp.set(participant.ip, nextIpCount);
+  if (partnerSocket) {
+    const partner = participants.get(partnerSocket);
+    if (partner) {
+      partner.partner = null;
+      sendJson(partnerSocket, { type: 'peer_left', reason: 'disconnected' });
+      sendJson(partnerSocket, { type: 'searching', reason: 'peer_left' });
+    }
+  }
+  matchWaitingParticipants();
+};
+
+peerServer.on('connection', (socket, request) => {
+  socket.isAlive = true;
+  socket.on('pong', () => { socket.isAlive = true; });
+
+  const ip = request.socket.remoteAddress || 'unknown';
+  const joinDeadline = setTimeout(() => {
+    if (!participants.has(socket)) socket.close(1008, 'Join required');
+  }, 10_000);
+
+  socket.on('message', raw => {
+    let event;
+    try {
+      event = JSON.parse(raw.toString());
+    } catch {
+      return sendJson(socket, { type: 'error', message: 'Invalid message format' });
+    }
+
+    if (event.type === 'join') {
+      if (participants.has(socket)) return;
+      const requestedId = cleanText(event.clientId, 80);
+      const idInUse = [...participants.values()].some(participant => participant.id === requestedId);
+      const id = requestedId && !idInUse ? requestedId : randomUUID();
+      const nickname = cleanText(event.nickname, 40);
+      const colorFrom = /^#[0-9a-f]{6}$/i.test(event.colorFrom) ? event.colorFrom : '#8C7FA3';
+      const colorTo = /^#[0-9a-f]{6}$/i.test(event.colorTo) ? event.colorTo : '#665A7D';
+      if (!nickname) return socket.close(1008, 'Invalid identity');
+      if ((connectionsByIp.get(ip) || 0) >= MAX_CONNECTIONS_PER_IP) {
+        return socket.close(1008, 'Too many connections');
+      }
+
+      clearTimeout(joinDeadline);
+      participants.set(socket, {
+        id, nickname, colorFrom, colorTo, ip, sentAt: [], partner: null, lastPartnerId: null,
+      });
+      connectionsByIp.set(ip, (connectionsByIp.get(ip) || 0) + 1);
+      sendJson(socket, { type: 'ready', clientId: id });
+      sendJson(socket, { type: 'searching', reason: 'joined' });
+      matchWaitingParticipants();
+      return;
+    }
+
+    const sender = participants.get(socket);
+    if (!sender) return sendJson(socket, { type: 'error', message: 'Join the room first' });
+
+    if (event.type === 'message') {
+      const text = cleanText(event.text, MESSAGE_LIMIT);
+      if (!text) return;
+      const partnerSocket = sender.partner;
+      if (!partnerSocket || !participants.has(partnerSocket)) {
+        return sendJson(socket, { type: 'error', message: 'Still looking for someone new.' });
+      }
+
+      const now = Date.now();
+      sender.sentAt = sender.sentAt.filter(ts => now - ts < 10_000);
+      if (sender.sentAt.length >= 8) {
+        return sendJson(socket, { type: 'error', message: 'Please slow down for a moment.' });
+      }
+      sender.sentAt.push(now);
+
+      const message = {
+        type: 'message',
+        id: cleanText(event.id, 100) || `peer_${now}`,
+        senderId: sender.id,
+        nickname: sender.nickname,
+        colorFrom: sender.colorFrom,
+        colorTo: sender.colorTo,
+        text,
+        ts: now,
+      };
+      sendJson(socket, message);
+      sendJson(partnerSocket, message);
+      return;
+    }
+
+    if (event.type === 'typing') {
+      if (sender.partner) {
+        sendJson(sender.partner, {
+          type: 'typing', senderId: sender.id, nickname: sender.nickname, active: event.active === true,
+        });
+      }
+      return;
+    }
+
+    if (event.type === 'next') {
+      returnToMatching(socket, 'next');
+      return;
+    }
+
+    if (event.type === 'report') {
+      const messageId = cleanText(event.messageId, 100);
+      if (messageId) {
+        const reportedPeer = sender.partner ? participants.get(sender.partner) : null;
+        console.warn(JSON.stringify({
+          event: 'peer_message_reported', messageId, reporterId: sender.id,
+          reportedPeerId: reportedPeer?.id, reportedAt: Date.now(),
+        }));
+        sendJson(socket, { type: 'report_ack', messageId });
+      }
+    }
+  });
+
+  socket.on('close', () => {
+    clearTimeout(joinDeadline);
+    removeParticipant(socket);
+  });
+  socket.on('error', () => removeParticipant(socket));
+});
+
+const heartbeat = setInterval(() => {
+  for (const socket of peerServer.clients) {
+    if (socket.isAlive === false) {
+      removeParticipant(socket);
+      socket.terminate();
+      continue;
+    }
+    socket.isAlive = false;
+    socket.ping();
+  }
+}, 30_000);
+heartbeat.unref();
+
+server.on('upgrade', (request, socket, head) => {
+  const pathname = new URL(request.url || '/', 'http://localhost').pathname;
+  if (pathname !== '/ws/peer') return socket.destroy();
+
+  const origin = request.headers.origin;
+  let sameHostOrigin = false;
+  try {
+    sameHostOrigin = !!origin && new URL(origin).host === request.headers.host;
+  } catch {}
+  const originAllowed = corsOrigins === true || !origin || sameHostOrigin || corsOrigins.includes(origin);
+  const ip = request.socket.remoteAddress || 'unknown';
+  if (!originAllowed || (connectionsByIp.get(ip) || 0) >= MAX_CONNECTIONS_PER_IP) {
+    socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+    return socket.destroy();
+  }
+
+  peerServer.handleUpgrade(request, socket, head, ws => peerServer.emit('connection', ws, request));
+});
+
+server.listen(PORT, () => {
+  console.log(`Server listening on http://localhost:${PORT}`);
+});
+
+const shutdown = () => {
+  for (const socket of peerServer.clients) socket.close(1001, 'Server restarting');
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 10_000).unref();
+};
+process.once('SIGTERM', shutdown);
+process.once('SIGINT', shutdown);
