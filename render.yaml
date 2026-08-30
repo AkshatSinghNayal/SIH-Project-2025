@@ -1,4 +1,4 @@
-# Render Infrastructure as Code blueprint for helloMind
+# Render Infrastructure as Code blueprint for helloMind Backend
 # Docs: https://render.com/docs/infrastructure-as-code
 
 services:
@@ -22,7 +22,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN
-        value: https://sih-frontend.onrender.com
+        sync: false
       - key: COMMUNITY_SESSION_SECRET
         generateValue: true
       - key: NODE_ENV
@@ -31,15 +31,3 @@ services:
         value: none
       - key: COOKIE_SECURE
         value: "true"
-
-  - type: web
-    name: sih-frontend
-    env: static
-    rootDir: SIH-Chat-Bot
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    envVars:
-      - key: VITE_USE_REMOTE_API
-        value: "true"
-      - key: VITE_API_BASE_URL
-        value: https://sih-backend.onrender.com
