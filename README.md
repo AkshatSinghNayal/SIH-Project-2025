@@ -1,15 +1,16 @@
 # helloMind 🧠 — Student Mental Wellness Platform
 
 A **production-hardened student mental wellness companion** built for the Smart India Hackathon.
-helloMind provides students a calm, private space to check in on their emotional state, talk with a compassionate AI, connect anonymously with peers, and build gentle daily habits — secured with **JWT HttpOnly cookie authentication** and **CSRF protection**.
+helloMind provides students a calm, private space to check in on their emotional state, talk with a compassionate AI, connect anonymously with peers, and build gentle daily habits — secured with **JWT HttpOnly cookie authentication**, **CSRF protection**, and **MongoDB chat persistence**.
 
 ---
 
 ## 🌟 Key Features
 
-- **Secure JWT Authentication** — Production-grade authentication using HttpOnly cookies (`__Host-token` in production), timing-safe CSRF headers (`X-CSRF-Token`), password policies, bcrypt cost factor 12 hashing, and generic login error handling.
-- **Resource Ownership & IDOR Protection** — User-scoped MongoDB chat and message persistence. Users can only access or delete their own data.
-- **AI Companion Chat** — Streaming Gemini 2.5 Flash responses over Server-Sent Events (SSE) with a breathing-circle thinking indicator, quick-reply suggestions, and safety disclaimers.
+- **Secure JWT Authentication** — Production-grade authentication using HttpOnly cookies (`__Host-token` in production), timing-safe CSRF headers (`X-CSRF-Token`), password policies, bcrypt hashing, and automatic index synchronization (`User.syncIndexes()`).
+- **Resource Ownership & IDOR Protection** — User-scoped MongoDB chat and message persistence. Users can only access, view, or delete their own data.
+- **AI Companion Chat & Multi-Model Waterfall** — Real-time streaming responses over Server-Sent Events (SSE) using `@google/genai` with automatic model fallback (`gemini-2.0-flash` → `gemini-2.0-flash-lite` → `gemini-2.5-flash` → `gemini-1.5-pro`), breathing-circle thinking indicator, and detailed error diagnostics.
+- **Persistent Conversations & Permanent Delete** — Conversations and messages are saved to MongoDB automatically. Users can switch between previous sessions or permanently delete unwanted chats with one click.
 - **Live Anonymous Peer Chat** — Real-time WebSockets (`/ws/peer`) pairing students anonymously with "Next person" controls, live presence counts, private typing indicators, auto-cleanup, and reporting.
 - **Mood Check-in & Assessments** — Daily mood logging on a 5-point face scale, structured check-in questionnaires with visual progress, and a 30-statement personality assessment with trait insights and practical wellness experiments.
 - **Global Community Garden** — Anonymous supportive community feed with stable session identities, support counts, post moderation/filtering, and owner deletion.
@@ -26,7 +27,7 @@ helloMind provides students a calm, private space to check in on their emotional
 | **Backend** | Node.js 20+, Express.js, WebSockets (`ws`) |
 | **Database** | MongoDB & Mongoose 8 |
 | **Authentication** | JWT, HttpOnly Cookies, CSRF Tokens, Bcryptjs |
-| **AI Integration** | Google Gemini 2.5 Flash (`@google/genai`) |
+| **AI Integration** | Google Gemini 2.0 / 2.5 (`@google/genai`) |
 | **Security** | Helmet, Express Rate Limit, Cookie Parser, CORS |
 
 ---
@@ -51,6 +52,7 @@ PORT=8787
 NODE_ENV=development
 MONGODB_URI=mongodb://localhost:27017/hellomind
 GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-2.0-flash
 JWT_SECRET=replace_with_a_long_random_jwt_secret
 CORS_ORIGIN=http://localhost:5173
 COOKIE_SAME_SITE=lax
@@ -86,7 +88,7 @@ Open **[http://localhost:5173](http://localhost:5173)** in your browser.
 
 ## 🧪 Testing
 
-Run the comprehensive test suite (20 automated unit & integration tests):
+Run the comprehensive test suite (automated unit & integration tests):
 
 ```bash
 # Run backend test suite (JWT Auth, CSRF, IDOR, Rate Limiting, Community)
@@ -110,6 +112,7 @@ Deploy both backend Web Service and frontend Static Site using Render Blueprints
 3. Connect your repository and select `render.yaml`.
 4. Render will automatically configure the services and prompt for secrets. Fill in:
    - `GEMINI_API_KEY`: Your Gemini API key
+   - `GEMINI_MODEL`: `gemini-2.0-flash`
    - `MONGODB_URI`: MongoDB Atlas connection string (`mongodb+srv://...`)
    - Render automatically generates `JWT_SECRET` and `COMMUNITY_SESSION_SECRET`.
 5. Click **Apply**.
@@ -124,6 +127,7 @@ Deploy both backend Web Service and frontend Static Site using Render Blueprints
 - **Environment Variables**:
   - `NODE_ENV`: `production`
   - `GEMINI_API_KEY`: `<your_gemini_api_key>`
+  - `GEMINI_MODEL`: `gemini-2.0-flash`
   - `MONGODB_URI`: `<mongodb_atlas_connection_string>`
   - `JWT_SECRET`: `<min_32_character_random_string>`
   - `COMMUNITY_SESSION_SECRET`: `<min_32_character_random_string>`
