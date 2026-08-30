@@ -138,9 +138,10 @@ const ChatView: React.FC<ChatViewProps> = ({ initialMessage, onInitialMessageCon
           const newMessages = [...session.messages];
           const last = newMessages[newMessages.length - 1];
           if (last.role === 'model') {
+            const detail = (error as Error)?.message;
             newMessages[newMessages.length - 1] = {
               ...last,
-              text: 'Sorry — that didn’t come through. Take a breath and try again?',
+              text: detail ? `Sorry — that didn’t come through (${detail}). Please try again.` : 'Sorry — that didn’t come through. Take a breath and try again?',
             };
           }
           return { ...session, messages: newMessages };

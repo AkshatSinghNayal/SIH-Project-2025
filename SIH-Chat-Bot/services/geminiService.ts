@@ -59,7 +59,10 @@ export const getStreamingChatbotResponse = async (chatId: string, history: Messa
                 chatId,
             }),
         });
-        if (!resp.ok || !resp.body) throw new Error('Backend stream failed');
+        if (!resp.ok || !resp.body) {
+            const errData = await resp.json().catch(() => ({}));
+            throw new Error(errData.error || `Stream failed with HTTP ${resp.status}`);
+        }
 
         // Convert SSE to async generator of { text }
         const reader = resp.body.getReader();
@@ -76,14 +79,26 @@ export const getStreamingChatbotResponse = async (chatId: string, history: Messa
                     buffer = buffer.slice(idx + 2);
                     if (chunk.startsWith('data: ')) {
                         const payload = chunk.slice(6);
-                        try { const obj = JSON.parse(payload); yield { text: obj.text || '' }; } catch {}
+                        try {
+                            const obj = JSON.parse(payload);
+                            if (obj.error) throw new Error(obj.error);
+                            yield { text: obj.text || '' };
+                        } catch (err: any) {
+                            if (err?.message && !err.message.includes('JSON')) throw err;
+                        }
                     }
                 }
             }
             if (buffer.length) {
                 if (buffer.startsWith('data: ')) {
                     const payload = buffer.slice(6);
-                    try { const obj = JSON.parse(payload); yield { text: obj.text || '' }; } catch {}
+                    try {
+                        const obj = JSON.parse(payload);
+                        if (obj.error) throw new Error(obj.error);
+                        yield { text: obj.text || '' };
+                    } catch (err: any) {
+                        if (err?.message && !err.message.includes('JSON')) throw err;
+                    }
                 }
             }
         }
