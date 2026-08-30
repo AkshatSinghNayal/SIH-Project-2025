@@ -30,9 +30,19 @@ if (process.env.NODE_ENV === 'production') {
 app.set('trust proxy', 1);
 
 const corsEnv = process.env.CORS_ORIGIN || 'http://localhost:5173';
-const corsOrigins = corsEnv.trim() === '*'
-  ? true
-  : corsEnv.split(',').map(s => s.trim()).filter(Boolean);
+let corsOrigins;
+
+if (corsEnv.trim() === '*') {
+  corsOrigins = true;
+} else {
+  const list = corsEnv.split(',').map(s => s.trim().replace(/\/+$/, '')).filter(Boolean);
+  const expanded = new Set();
+  list.forEach(origin => {
+    expanded.add(origin);
+    expanded.add(`${origin}/`);
+  });
+  corsOrigins = Array.from(expanded);
+}
 
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
