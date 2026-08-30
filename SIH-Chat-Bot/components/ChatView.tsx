@@ -3,7 +3,7 @@ import ChatWindow from './ChatWindow';
 import type { ChatSession, Message } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { getStreamingChatbotResponse } from '../services/geminiService';
-import { getChatsForUser, saveChatsForUser } from '../services/apiService';
+import { getChatsForUser, saveChatsForUser, createBackendChat, deleteBackendChat } from '../services/apiService';
 import { PlusIcon, TrashIcon } from './icons';
 
 interface ChatViewProps {
@@ -55,24 +55,33 @@ const ChatView: React.FC<ChatViewProps> = ({ initialMessage, onInitialMessageCon
     return () => clearTimeout(saveTimer.current);
   }, [chatSessions, user?.id]);
 
-  const handleNewChat = () => {
-    const newChatId = `chat_${Date.now()}`;
+  const handleNewChat = async () => {
     const welcomeMessage: Message = {
       role: 'model',
       text: "Hello! I'm here to listen and support you. What's on your mind today?",
       timestamp: Date.now(),
     };
+
+    let newChatId = `chat_${Date.now()}`;
+    if (user && user.id !== 'guest') {
+      const backendId = await createBackendChat('New conversation');
+      if (backendId) {
+        newChatId = backendId;
+      }
+    }
+
     const newSession: ChatSession = {
       id: newChatId,
       title: 'New conversation',
       messages: [welcomeMessage],
       createdAt: Date.now(),
     };
+
     setChatSessions(prev => [newSession, ...prev]);
     setActiveChatId(newChatId);
   };
 
-  const handleDeleteChat = (chatId: string) => {
+  const handleDeleteChat = async (chatId: string) => {
     setChatSessions(prev => {
       const remainingSessions = prev.filter(session => session.id !== chatId);
       if (activeChatId === chatId) {
@@ -80,6 +89,10 @@ const ChatView: React.FC<ChatViewProps> = ({ initialMessage, onInitialMessageCon
       }
       return remainingSessions;
     });
+
+    if (user && user.id !== 'guest') {
+      await deleteBackendChat(chatId);
+    }
   };
 
   const handleSendMessage = async (messageText: string) => {

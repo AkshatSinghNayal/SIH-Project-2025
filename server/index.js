@@ -159,23 +159,31 @@ app.post('/api/chat/stream', requireAuth, requireCsrf, async (req, res) => {
       throw lastError || new Error('All Gemini model candidates failed');
     }
 
+    let fullBotText = '';
     for await (const chunk of stream) {
       const text = chunk?.text ?? '';
       if (text) {
+        fullBotText += text;
         res.write(`data: ${JSON.stringify({ text })}\n\n`);
       }
     }
     res.end();
 
-    // Persist messages if Mongo is connected and targetChatId is valid
-    if (process.env.MONGODB_URI && userId && targetChatId) {
+    // Persist user and AI messages to MongoDB for user account
+    if (process.env.MONGODB_URI && userId) {
       try {
+        let activeChatId = targetChatId;
+        if (!activeChatId) {
+          const titleSnippet = message.substring(0, 30) + (message.length > 30 ? '…' : '');
+          const newChat = await Chat.create({ userId, title: titleSnippet });
+          activeChatId = newChat._id.toString();
+        }
+
         const now = Date.now();
-        await Message.create({ chatId: targetChatId, role: 'user', text: message, timestamp: now });
-        const hist = chat.getHistory(true);
-        const last = hist[hist.length - 1];
-        const botText = last?.parts?.map(p => p.text).join('') || '';
-        if (botText) await Message.create({ chatId: targetChatId, role: 'model', text: botText, timestamp: Date.now() });
+        await Message.create({ chatId: activeChatId, role: 'user', text: message, timestamp: now });
+        if (fullBotText) {
+          await Message.create({ chatId: activeChatId, role: 'model', text: fullBotText, timestamp: now + 1 });
+        }
       } catch (err) {
         console.error('Persist stream messages failed:', err?.message);
       }
