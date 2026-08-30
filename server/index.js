@@ -55,6 +55,8 @@ if (process.env.MONGODB_URI) {
   });
 }
 
+const isValidObjectId = (id) => typeof id === 'string' && mongoose.Types.ObjectId.isValid(id) && id.length === 24;
+
 // POST /api/chat/stream { model?, history: [{role,text}], message: string, chatId?: string }
 app.post('/api/chat/stream', requireAuth, requireCsrf, async (req, res) => {
   try {
@@ -66,10 +68,11 @@ app.post('/api/chat/stream', requireAuth, requireCsrf, async (req, res) => {
       return res.status(400).json({ error: 'message is required' });
     }
 
-    if (chatId && process.env.MONGODB_URI) {
+    let targetChatId = null;
+    if (chatId && process.env.MONGODB_URI && isValidObjectId(chatId)) {
       const existingChat = await Chat.findOne({ _id: chatId, userId });
-      if (!existingChat) {
-        return res.status(404).json({ error: 'Chat conversation not found' });
+      if (existingChat) {
+        targetChatId = chatId;
       }
     }
 
@@ -100,16 +103,16 @@ app.post('/api/chat/stream', requireAuth, requireCsrf, async (req, res) => {
     }
     res.end();
 
-    // Persist messages if Mongo is connected and chat context provided
-    if (process.env.MONGODB_URI && userId && chatId) {
+    // Persist messages if Mongo is connected and targetChatId is valid
+    if (process.env.MONGODB_URI && userId && targetChatId) {
       try {
         const now = Date.now();
-        await Message.create({ chatId, role: 'user', text: message, timestamp: now });
+        await Message.create({ chatId: targetChatId, role: 'user', text: message, timestamp: now });
         // Last chunk already streamed; fetch curated history from chat and save the model message end state
         const hist = chat.getHistory(true);
         const last = hist[hist.length - 1];
         const botText = last?.parts?.map(p => p.text).join('') || '';
-        if (botText) await Message.create({ chatId, role: 'model', text: botText, timestamp: Date.now() });
+        if (botText) await Message.create({ chatId: targetChatId, role: 'model', text: botText, timestamp: Date.now() });
       } catch (err) {
         console.error('Persist stream messages failed:', err?.message);
       }
@@ -161,6 +164,7 @@ app.delete('/api/chats/:chatId', requireAuth, requireCsrf, async (req, res) => {
     if (!process.env.MONGODB_URI) return res.status(501).json({ error: 'db disabled' });
     const { chatId } = req.params;
     const userId = req.user.id;
+    if (!isValidObjectId(chatId)) return res.status(400).json({ error: 'Invalid chat ID' });
     const chat = await Chat.findOne({ _id: chatId, userId });
     if (!chat) return res.status(404).json({ error: 'Chat not found' });
 
@@ -176,6 +180,7 @@ app.get('/api/messages/:chatId', requireAuth, async (req, res) => {
     if (!process.env.MONGODB_URI) return res.json([]);
     const { chatId } = req.params;
     const userId = req.user.id;
+    if (!isValidObjectId(chatId)) return res.status(400).json({ error: 'Invalid chat ID' });
     const chat = await Chat.findOne({ _id: chatId, userId });
     if (!chat) return res.status(404).json({ error: 'Chat not found' });
 
