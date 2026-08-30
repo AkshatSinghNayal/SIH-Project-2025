@@ -56,9 +56,12 @@ app.use('/api/community', communityRouter);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
-const ai = process.env.GEMINI_API_KEY
-  ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
-  : null;
+const getAiClient = () => {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key || key === 'mock_key') return null;
+  return new GoogleGenAI({ apiKey: key });
+};
+
 if (process.env.MONGODB_URI) {
   connectMongo(process.env.MONGODB_URI).catch(err => {
     console.error('Mongo connection failed:', err.message);
@@ -67,10 +70,38 @@ if (process.env.MONGODB_URI) {
 
 const isValidObjectId = (id) => typeof id === 'string' && mongoose.Types.ObjectId.isValid(id) && id.length === 24;
 
+const sanitizeHistory = (rawHistory) => {
+  if (!Array.isArray(rawHistory)) return [];
+  const valid = rawHistory.filter(
+    h => h && typeof h.text === 'string' && h.text.trim() && (h.role === 'user' || h.role === 'model')
+  );
+
+  const formatted = [];
+  let expectedRole = 'user';
+  for (const msg of valid) {
+    if (msg.role === expectedRole) {
+      formatted.push({ role: msg.role, parts: [{ text: msg.text.trim() }] });
+      expectedRole = expectedRole === 'user' ? 'model' : 'user';
+    }
+  }
+
+  // Gemini API requires chat history to end with a model turn before sending a new user message
+  if (formatted.length > 0 && formatted[formatted.length - 1].role === 'user') {
+    formatted.pop();
+  }
+
+  return formatted;
+};
+
 // POST /api/chat/stream { model?, history: [{role,text}], message: string, chatId?: string }
 app.post('/api/chat/stream', requireAuth, requireCsrf, async (req, res) => {
   try {
-    if (!ai) return res.status(503).json({ error: 'Gemini is not configured' });
+    const ai = getAiClient();
+    if (!ai) {
+      console.warn('Streaming failed: GEMINI_API_KEY is not configured or set to mock_key');
+      return res.status(503).json({ error: 'Gemini is not configured. Please set GEMINI_API_KEY in environment variables.' });
+    }
+
     const { model, history = [], message, chatId } = req.body || {};
     const userId = req.user.id;
 
@@ -86,26 +117,22 @@ app.post('/api/chat/stream', requireAuth, requireCsrf, async (req, res) => {
       }
     }
 
-    // curate history to start with a user message and ensure correct format
-    const curated = Array.isArray(history) ? history.filter(h => h && typeof h.text === 'string' && (h.role === 'user' || h.role === 'model')) : [];
-    let start = 0;
-    while (start < curated.length && curated[start].role === 'model') start++;
-    const prior = start > 0 ? curated.slice(start) : curated;
-
-    const requestedModel = (typeof model === 'string' && !model.includes('2.5')) ? model : 'gemini-2.0-flash';
+    const sanitizedHistory = sanitizeHistory(history);
+    const requestedModel = (typeof model === 'string' && model.startsWith('gemini')) ? model : 'gemini-2.0-flash';
 
     let chat;
     try {
       chat = ai.chats.create({
         model: requestedModel,
         config: { systemInstruction: SYSTEM_INSTRUCTION },
-        history: prior.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
+        history: sanitizedHistory,
       });
     } catch (err) {
+      console.warn(`Failed to create chat with model ${requestedModel}, falling back to gemini-1.5-flash:`, err?.message);
       chat = ai.chats.create({
         model: 'gemini-1.5-flash',
         config: { systemInstruction: SYSTEM_INSTRUCTION },
-        history: prior.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
+        history: sanitizedHistory,
       });
     }
 
@@ -117,13 +144,13 @@ app.post('/api/chat/stream', requireAuth, requireCsrf, async (req, res) => {
     try {
       stream = await chat.sendMessageStream({ message });
     } catch (err) {
-      console.warn(`Primary model ${requestedModel} failed, trying gemini-1.5-flash:`, err?.message);
-      chat = ai.chats.create({
+      console.warn(`sendMessageStream with ${requestedModel} failed, trying gemini-1.5-flash fallback:`, err?.message || err);
+      const fallbackChat = ai.chats.create({
         model: 'gemini-1.5-flash',
         config: { systemInstruction: SYSTEM_INSTRUCTION },
-        history: prior.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
+        history: sanitizedHistory,
       });
-      stream = await chat.sendMessageStream({ message });
+      stream = await fallbackChat.sendMessageStream({ message });
     }
 
     for await (const chunk of stream) {
@@ -139,7 +166,6 @@ app.post('/api/chat/stream', requireAuth, requireCsrf, async (req, res) => {
       try {
         const now = Date.now();
         await Message.create({ chatId: targetChatId, role: 'user', text: message, timestamp: now });
-        // Last chunk already streamed; fetch curated history from chat and save the model message end state
         const hist = chat.getHistory(true);
         const last = hist[hist.length - 1];
         const botText = last?.parts?.map(p => p.text).join('') || '';
@@ -149,9 +175,12 @@ app.post('/api/chat/stream', requireAuth, requireCsrf, async (req, res) => {
       }
     }
   } catch (e) {
-    console.error('Streaming error:', e?.status, e?.message);
-    if (!res.headersSent) res.status(500).json({ error: 'stream failed' });
-    else res.end();
+    console.error('Streaming endpoint error:', e?.status, e?.message || e, e);
+    if (!res.headersSent) {
+      res.status(500).json({ error: e?.message || 'stream failed' });
+    } else {
+      res.end();
+    }
   }
 });
 
