@@ -192,6 +192,7 @@ router.post('/register', registerLimiter, async (req, res) => {
     }
 
     const { username } = usernameResult;
+    console.log(`[REGISTER] Processing registration request for username: '${username}'`);
 
     // Check existing user case-insensitively to avoid duplicate conflicts
     const escapedUsername = username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -199,18 +200,21 @@ router.post('/register', registerLimiter, async (req, res) => {
       username: { $regex: new RegExp(`^${escapedUsername}$`, 'i') }
     });
     if (existing) {
+      console.log(`[REGISTER] Rejecting duplicate registration: username '${username}' already exists in database.`);
       return res.status(400).json({ error: `Username '${rawUsername.trim()}' is already taken. Please choose a different username or sign in.` });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await User.create({ username, passwordHash });
+    console.log(`[REGISTER] Successfully created user '${username}' (ID: ${user._id})`);
 
     return createAuthResponse(res, user);
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(400).json({ error: 'Username is already taken. Please choose a different username or sign in.' });
+      console.log(`[REGISTER] E11000 Mongo duplicate key error for '${rawUsername}':`, error.keyValue || error.keyPattern);
+      return res.status(400).json({ error: `Username '${rawUsername.trim()}' is already taken. Please choose a different username or sign in.` });
     }
-    console.error('Registration error:', error);
+    console.error('[REGISTER] Registration server error:', error);
     return res.status(500).json({ error: 'Registration failed. Please try again.' });
   }
 });
