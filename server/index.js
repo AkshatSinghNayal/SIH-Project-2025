@@ -119,39 +119,41 @@ app.post('/api/chat/stream', requireAuth, requireCsrf, async (req, res) => {
     }
 
     const sanitizedHistory = sanitizeHistory(history);
-    const requestedModel = (typeof model === 'string' && model.startsWith('gemini')) ? model : 'gemini-2.0-flash';
 
-    let chat;
-    try {
-      chat = ai.chats.create({
-        model: requestedModel,
-        config: { systemInstruction: SYSTEM_INSTRUCTION },
-        history: sanitizedHistory,
-      });
-    } catch (err) {
-      console.warn(`Failed to create chat with model ${requestedModel}, falling back to gemini-1.5-flash:`, err?.message);
-      chat = ai.chats.create({
-        model: 'gemini-1.5-flash',
-        config: { systemInstruction: SYSTEM_INSTRUCTION },
-        history: sanitizedHistory,
-      });
-    }
+    // Candidates list in order of preference
+    const modelCandidates = Array.from(new Set([
+      (typeof model === 'string' && model.startsWith('gemini')) ? model : 'gemini-2.0-flash',
+      'gemini-2.0-flash',
+      'gemini-2.0-flash-lite',
+      'gemini-1.5-flash-latest'
+    ]));
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    let stream;
-    try {
-      stream = await chat.sendMessageStream({ message });
-    } catch (err) {
-      console.warn(`sendMessageStream with ${requestedModel} failed, trying gemini-1.5-flash fallback:`, err?.message || err);
-      const fallbackChat = ai.chats.create({
-        model: 'gemini-1.5-flash',
-        config: { systemInstruction: SYSTEM_INSTRUCTION },
-        history: sanitizedHistory,
-      });
-      stream = await fallbackChat.sendMessageStream({ message });
+    let stream = null;
+    let lastError = null;
+
+    for (const candidateModel of modelCandidates) {
+      try {
+        console.log(`[CHAT STREAM] Attempting model '${candidateModel}'...`);
+        const chatInstance = ai.chats.create({
+          model: candidateModel,
+          config: { systemInstruction: SYSTEM_INSTRUCTION },
+          history: sanitizedHistory,
+        });
+        stream = await chatInstance.sendMessageStream({ message });
+        console.log(`[CHAT STREAM] Success streaming with model '${candidateModel}'`);
+        break;
+      } catch (err) {
+        console.warn(`[CHAT STREAM] Model '${candidateModel}' failed:`, err?.message || err);
+        lastError = err;
+      }
+    }
+
+    if (!stream) {
+      throw lastError || new Error('All Gemini model candidates failed');
     }
 
     for await (const chunk of stream) {
