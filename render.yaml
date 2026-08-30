@@ -10,11 +10,11 @@ services:
     region: oregon
     buildCommand: npm install
     startCommand: npm start
-    runtime: node
-    nodeVersion: 20
     autoDeploy: true
     healthCheckPath: /health
     envVars:
+      - key: NODE_VERSION
+        value: "20"
       - key: GEMINI_API_KEY
         sync: false
       - key: MONGODB_URI
