@@ -57,8 +57,8 @@ export const validateUsername = (raw) => {
   if (username.length < 3 || username.length > 32) {
     return { valid: false, message: 'Username must be between 3 and 32 characters long.' };
   }
-  if (!/^[a-z0-9_-]+$/.test(username)) {
-    return { valid: false, message: 'Username can only contain letters, numbers, underscores, and hyphens.' };
+  if (!/^[a-z0-9_@.-]+$/.test(username)) {
+    return { valid: false, message: 'Username can only contain letters, numbers, underscores, hyphens, dots, and @.' };
   }
   return { valid: true, username };
 };
@@ -193,10 +193,13 @@ router.post('/register', registerLimiter, async (req, res) => {
 
     const { username } = usernameResult;
 
-    // Check existing user to avoid bcrypt cost on duplicate username
-    const existing = await User.findOne({ username });
+    // Check existing user case-insensitively to avoid duplicate conflicts
+    const escapedUsername = username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const existing = await User.findOne({
+      username: { $regex: new RegExp(`^${escapedUsername}$`, 'i') }
+    });
     if (existing) {
-      return res.status(400).json({ error: 'Username is already taken' });
+      return res.status(400).json({ error: `Username '${rawUsername.trim()}' is already taken. Please choose a different username or sign in.` });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
@@ -205,9 +208,9 @@ router.post('/register', registerLimiter, async (req, res) => {
     return createAuthResponse(res, user);
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(400).json({ error: 'Username is already taken' });
+      return res.status(400).json({ error: 'Username is already taken. Please choose a different username or sign in.' });
     }
-    console.error('Registration error:', error.message);
+    console.error('Registration error:', error);
     return res.status(500).json({ error: 'Registration failed. Please try again.' });
   }
 });

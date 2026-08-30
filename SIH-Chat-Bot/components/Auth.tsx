@@ -31,8 +31,8 @@ const Auth: React.FC = () => {
         setError('Username must be between 3 and 32 characters long.');
         return;
       }
-      if (!/^[a-zA-Z0-9_-]+$/.test(cleanUsername)) {
-        setError('Username can only contain letters, numbers, underscores, and hyphens.');
+      if (!/^[a-zA-Z0-9_@.-]+$/.test(cleanUsername)) {
+        setError('Username can only contain letters, numbers, underscores, hyphens, dots, and @.');
         return;
       }
       if (password.length < 8) {
