@@ -120,13 +120,16 @@ app.post('/api/chat/stream', requireAuth, requireCsrf, async (req, res) => {
 
     const sanitizedHistory = sanitizeHistory(history);
 
-    // Candidates list in order of preference
+    const envModel = process.env.GEMINI_MODEL;
+    // Candidates list in order of preference (excluding deprecated/404 names)
     const modelCandidates = Array.from(new Set([
-      (typeof model === 'string' && model.startsWith('gemini')) ? model : 'gemini-2.0-flash',
+      (envModel && envModel.startsWith('gemini') && !envModel.includes('latest')) ? envModel : null,
+      (typeof model === 'string' && model.startsWith('gemini') && !model.includes('latest')) ? model : null,
       'gemini-2.0-flash',
       'gemini-2.0-flash-lite',
-      'gemini-1.5-flash-latest'
-    ]));
+      'gemini-2.5-flash',
+      'gemini-1.5-pro',
+    ].filter(Boolean)));
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
