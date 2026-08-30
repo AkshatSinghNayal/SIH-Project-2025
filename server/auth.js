@@ -211,8 +211,14 @@ router.post('/register', registerLimiter, async (req, res) => {
     return createAuthResponse(res, user);
   } catch (error) {
     if (error.code === 11000) {
-      console.log(`[REGISTER] E11000 Mongo duplicate key error for '${rawUsername}':`, error.keyValue || error.keyPattern);
-      return res.status(400).json({ error: `Username '${rawUsername.trim()}' is already taken. Please choose a different username or sign in.` });
+      console.log(`[REGISTER] E11000 Mongo duplicate key error:`, error.keyValue || error.keyPattern);
+      const duplicateField = Object.keys(error.keyPattern || {})[0];
+      if (!duplicateField || duplicateField === 'username') {
+        return res.status(400).json({ error: `Username '${rawUsername.trim()}' is already taken. Please choose a different username or sign in.` });
+      }
+      console.warn(`[REGISTER] Stale non-username unique index conflict on '${duplicateField}', attempting index sync...`);
+      User.syncIndexes().catch(() => {});
+      return res.status(500).json({ error: 'Database index sync in progress. Please try registering again in a moment.' });
     }
     console.error('[REGISTER] Registration server error:', error);
     return res.status(500).json({ error: 'Registration failed. Please try again.' });
