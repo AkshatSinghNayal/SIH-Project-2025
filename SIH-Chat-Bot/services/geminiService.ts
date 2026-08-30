@@ -30,7 +30,7 @@ const getChatInstance = (chatId: string, history: Message[]): Chat => {
     const geminiHistory = curated.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] }));
 
     const chat = ai.chats.create({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.0-flash',
         config: { systemInstruction: SYSTEM_INSTRUCTION },
         history: geminiHistory,
     });
@@ -53,7 +53,7 @@ export const getStreamingChatbotResponse = async (chatId: string, history: Messa
             },
             credentials: 'include',
             body: JSON.stringify({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-2.0-flash',
                 history: history.slice(0, -1),
                 message: lastMessage.text,
                 chatId,

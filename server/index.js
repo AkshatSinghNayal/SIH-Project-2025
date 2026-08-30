@@ -71,7 +71,7 @@ const isValidObjectId = (id) => typeof id === 'string' && mongoose.Types.ObjectI
 app.post('/api/chat/stream', requireAuth, requireCsrf, async (req, res) => {
   try {
     if (!ai) return res.status(503).json({ error: 'Gemini is not configured' });
-    const { model = 'gemini-2.5-flash', history = [], message, chatId } = req.body || {};
+    const { model, history = [], message, chatId } = req.body || {};
     const userId = req.user.id;
 
     if (typeof message !== 'string' || !message.trim()) {
@@ -92,19 +92,40 @@ app.post('/api/chat/stream', requireAuth, requireCsrf, async (req, res) => {
     while (start < curated.length && curated[start].role === 'model') start++;
     const prior = start > 0 ? curated.slice(start) : curated;
 
-    const chat = ai.chats.create({
-      model,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-      },
-      history: prior.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
-    });
+    const requestedModel = (typeof model === 'string' && !model.includes('2.5')) ? model : 'gemini-2.0-flash';
+
+    let chat;
+    try {
+      chat = ai.chats.create({
+        model: requestedModel,
+        config: { systemInstruction: SYSTEM_INSTRUCTION },
+        history: prior.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
+      });
+    } catch (err) {
+      chat = ai.chats.create({
+        model: 'gemini-1.5-flash',
+        config: { systemInstruction: SYSTEM_INSTRUCTION },
+        history: prior.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
+      });
+    }
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    const stream = await chat.sendMessageStream({ message });
+    let stream;
+    try {
+      stream = await chat.sendMessageStream({ message });
+    } catch (err) {
+      console.warn(`Primary model ${requestedModel} failed, trying gemini-1.5-flash:`, err?.message);
+      chat = ai.chats.create({
+        model: 'gemini-1.5-flash',
+        config: { systemInstruction: SYSTEM_INSTRUCTION },
+        history: prior.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
+      });
+      stream = await chat.sendMessageStream({ message });
+    }
+
     for await (const chunk of stream) {
       const text = chunk?.text ?? '';
       if (text) {
