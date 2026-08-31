@@ -132,14 +132,14 @@ const AppShell: React.FC<AppShellProps> = ({ activeView, onNavigate, children })
 
   if (activeView === 'peer') {
     return (
-      <div className="fixed inset-0 z-50 h-screen w-screen overflow-hidden bg-canvas">
+      <div className="fixed inset-0 z-50 h-[100dvh] w-full overflow-hidden bg-canvas flex flex-col">
         {children}
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-canvas">
+    <div className="flex h-[100dvh] w-screen overflow-hidden bg-canvas">
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-64 lg:w-72 flex-shrink-0">{sidebar}</aside>
 
@@ -160,9 +160,9 @@ const AppShell: React.FC<AppShellProps> = ({ activeView, onNavigate, children })
         {sidebar}
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Mobile top bar */}
-        <header className="md:hidden flex items-center gap-3 px-4 h-14 bg-canvas border-b border-line-200">
+        <header className="md:hidden flex items-center gap-3 px-4 h-14 bg-canvas border-b border-line-200 flex-shrink-0">
           <button className="p-1.5 -ml-1.5 text-ink-900" onClick={() => setDrawerOpen(true)} aria-label="Open menu">
             <MenuIcon className="w-6 h-6" />
           </button>
@@ -177,10 +177,10 @@ const AppShell: React.FC<AppShellProps> = ({ activeView, onNavigate, children })
         </header>
 
         <main
-          className={`flex-1 min-h-0 ${activeView === 'chat' || activeView === 'peer' ? 'overflow-hidden' : 'overflow-y-auto'}`}
+          className={`flex-1 min-h-0 ${activeView === 'chat' || activeView === 'peer' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}
           key={activeView}
         >
-          <div className={`animate-rise ${activeView === 'chat' || activeView === 'peer' ? 'h-full' : 'min-h-full'}`}>
+          <div className={`animate-rise ${activeView === 'chat' || activeView === 'peer' ? 'h-full flex flex-col min-h-0' : 'min-h-full'}`}>
             {children}
           </div>
         </main>

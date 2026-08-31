@@ -216,8 +216,8 @@ const PeerChat: React.FC<PeerChatProps> = ({ onNavigate }) => {
   const starters = ['Hey, how is your day going?', 'I could use someone to listen.', 'What has been on your mind lately?'];
 
   return (
-    <main className="h-full bg-canvas p-0 sm:p-4 lg:p-6">
-      <div className="mx-auto flex h-full max-w-5xl overflow-hidden border-line-200 bg-surface sm:rounded-organic sm:border sm:shadow-soft-lg">
+    <main className="h-[100dvh] w-full bg-canvas p-0 sm:p-4 lg:p-6 flex flex-col min-h-0 overflow-hidden">
+      <div className="mx-auto flex h-full w-full max-w-5xl flex-col lg:flex-row overflow-hidden border-line-200 bg-surface sm:rounded-organic sm:border sm:shadow-soft-lg min-h-0 flex-1">
         <aside className="hidden w-64 flex-shrink-0 flex-col border-r border-line-200 bg-gradient-to-b from-dusk-50 to-sage-50 p-5 lg:flex">
           <div><p className="text-xs font-medium uppercase tracking-[0.16em] text-dusk-700">Anonymous space</p><h1 className="mt-1 font-display text-2xl text-ink-900">Peer chat</h1><p className="mt-2 text-sm leading-relaxed text-ink-600">A private, one-to-one conversation with another student.</p></div>
           <div className="mt-7 rounded-soft border border-dusk-200 bg-surface p-4"><p className="text-xs text-ink-600">You appear as</p><div className="mt-3 flex items-center gap-3"><PersonaBadge name={profile.nickname} from={profile.colorFrom} to={profile.colorTo} size={40} /><div className="min-w-0"><p className="truncate text-sm font-medium text-ink-900">{profile.nickname}</p><p className="text-xs text-ink-600">Garden identity</p></div></div></div>
@@ -232,25 +232,72 @@ const PeerChat: React.FC<PeerChatProps> = ({ onNavigate }) => {
           </div>
         </aside>
 
-        <section className="flex min-w-0 flex-1 flex-col">
-          <header className="flex min-h-16 items-center gap-3 border-b border-line-200 bg-surface px-4 py-3 sm:px-6">
-            <button onClick={exitRoom} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-line-200 bg-canvas text-xs font-medium text-ink-600 hover:text-ink-900 hover:border-sage-500 transition-colors" title="Exit full screen anonymous chat">
-              <ArrowLeftIcon className="h-4 w-4" />
-              <span>Exit</span>
-            </button>
-            {matchedPeer ? <PersonaBadge name={matchedPeer.nickname} from={matchedPeer.colorFrom} to={matchedPeer.colorTo} size={40} /> : <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-dusk-100"><LockIcon className="h-4 w-4 text-dusk-700" /><span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-surface ${status === 'connected' ? 'bg-sage-500' : 'bg-honey-500 animate-pulse'}`} /></span>}
-            <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><h2 className="truncate text-sm font-medium text-ink-900">{matchedPeer?.nickname ?? 'Anonymous peer chat'}</h2>{matchedPeer && <span className="hidden rounded-full bg-sage-100 px-2 py-0.5 text-[10px] font-medium text-sage-700 sm:inline">Connected</span>}</div><p className="truncate text-xs text-ink-600">{presenceText}{status === 'connected' && !matchedPeer ? ` · ${online} online` : ''}</p></div>
-            {!leftRoom && matchedPeer && <button onClick={nextPerson} className="btn-secondary px-3 py-2 text-xs lg:hidden" title="Find a different person"><ArrowRightIcon className="h-4 w-4" /><span className="hidden sm:inline">Next</span></button>}
-            {!leftRoom && <button onClick={leave} className="btn-ghost px-2.5 py-2 lg:hidden" aria-label="Leave anonymous chat" title="Leave quietly"><CloseIcon className="h-4 w-4" /></button>}
+        <section className="flex min-w-0 flex-1 flex-col h-full overflow-hidden">
+          <header className="flex h-14 sm:min-h-16 flex-shrink-0 items-center justify-between gap-2 border-b border-line-200 bg-surface px-3 py-2 sm:px-6">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <button
+                onClick={exitRoom}
+                className="flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full border border-line-200 bg-canvas text-xs font-medium text-ink-600 hover:text-ink-900 hover:border-sage-500 transition-colors flex-shrink-0"
+                title="Exit full screen anonymous chat"
+              >
+                <ArrowLeftIcon className="h-4 w-4" />
+                <span className="hidden sm:inline">Exit</span>
+              </button>
+              {matchedPeer ? (
+                <PersonaBadge name={matchedPeer.nickname} from={matchedPeer.colorFrom} to={matchedPeer.colorTo} size={36} />
+              ) : (
+                <span className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-dusk-100">
+                  <LockIcon className="h-4 w-4 text-dusk-700" />
+                  <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-surface ${status === 'connected' ? 'bg-sage-500' : 'bg-honey-500 animate-pulse'}`} />
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <h2 className="truncate text-xs sm:text-sm font-semibold text-ink-900 leading-tight">
+                    {matchedPeer?.nickname ?? 'Anonymous Peer'}
+                  </h2>
+                  {matchedPeer && (
+                    <span className="hidden rounded-full bg-sage-100 px-2 py-0.5 text-[10px] font-medium text-sage-700 sm:inline">
+                      Connected
+                    </span>
+                  )}
+                </div>
+                <p className="truncate text-[11px] sm:text-xs text-ink-600 leading-tight">
+                  {presenceText}{status === 'connected' && !matchedPeer ? ` · ${online} online` : ''}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {!leftRoom && matchedPeer && (
+                <button
+                  onClick={nextPerson}
+                  className="btn-secondary px-2.5 py-1.5 text-xs lg:hidden flex items-center gap-1"
+                  title="Find a different person"
+                >
+                  <ArrowRightIcon className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Next</span>
+                </button>
+              )}
+              {!leftRoom && (
+                <button
+                  onClick={leave}
+                  className="btn-ghost p-2 lg:hidden text-ink-600 hover:text-coral-500"
+                  aria-label="Leave anonymous chat"
+                  title="Leave quietly"
+                >
+                  <CloseIcon className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto bg-gradient-to-b from-dusk-50/70 to-canvas px-4 py-5 sm:px-7" aria-live="polite">
+          <div className="flex-1 min-h-0 overflow-y-auto bg-gradient-to-b from-dusk-50/70 to-canvas px-3 py-4 sm:px-7" aria-live="polite">
             <div className="mx-auto max-w-2xl">
-              <div className="mb-5 flex items-center justify-center gap-2 text-[11px] text-ink-600"><LockIcon className="h-3.5 w-3.5" />Live and anonymous · cleared when either person leaves</div>
+              <div className="mb-4 flex items-center justify-center gap-1.5 text-[11px] text-ink-600"><LockIcon className="h-3.5 w-3.5" />Live and anonymous · cleared when either person leaves</div>
               {roomError && <div className="mb-5 rounded-soft border border-coral-500/30 bg-coral-100 px-4 py-3 text-sm text-ink-900">{roomError}</div>}
               {roomNotice && !roomError && matchedPeer && <p className="mb-5 text-center text-xs text-ink-600">{roomNotice}</p>}
 
-              {messages.length === 0 && <div className="flex min-h-[340px] flex-col items-center justify-center text-center animate-rise">
+              {messages.length === 0 && <div className="flex min-h-[300px] flex-col items-center justify-center text-center animate-rise">
                 {leftRoom ? (
                   <>
                     <span className="flex h-16 w-16 items-center justify-center rounded-full bg-sage-100 text-sage-700"><LockIcon className="h-7 w-7" /></span>
@@ -274,11 +321,11 @@ const PeerChat: React.FC<PeerChatProps> = ({ onNavigate }) => {
             </div>
           </div>
 
-          <form onSubmit={event => { event.preventDefault(); send(); }} className="border-t border-line-200 bg-surface px-4 py-3 sm:px-6 sm:py-4">
+          <form onSubmit={event => { event.preventDefault(); send(); }} className="flex-shrink-0 border-t border-line-200 bg-surface px-3 py-2.5 sm:px-6 sm:py-3.5">
             <div className="mx-auto max-w-2xl">
-              {!leftRoom && !canChat && <p className="mb-2 text-center text-xs text-ink-600">{status === 'connected' ? (others > 0 ? 'Finding a different person…' : 'Messages unlock when someone joins.') : 'Connecting securely…'}</p>}
-              <div className={`flex items-end gap-2 rounded-[22px] border bg-canvas p-2 pl-4 transition-all focus-within:border-dusk-500 focus-within:ring-2 focus-within:ring-dusk-500/20 ${canChat ? 'border-line-200' : 'border-line-200 opacity-60'}`}><label htmlFor="peer-input" className="sr-only">Type your message</label><textarea id="peer-input" ref={textareaRef} rows={1} value={input} onChange={event => updateInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send(); } }} placeholder={canChat ? `Message ${matchedPeer?.nickname}…` : leftRoom ? 'Rejoin to start talking' : 'Waiting for a match…'} autoComplete="off" maxLength={1000} disabled={!canChat} className="max-h-40 flex-1 resize-none bg-transparent py-2 text-[15px] leading-relaxed text-ink-900 placeholder:text-ink-600/60 focus:outline-none disabled:cursor-not-allowed" /><button type="submit" className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-dusk-700 text-white transition-colors hover:bg-dusk-500 disabled:bg-dusk-200" disabled={!canChat || !input.trim()} aria-label="Send message"><SendIcon className="h-5 w-5" /></button></div>
-              <div className="mt-1.5 flex items-center justify-between px-1 text-[10px] text-ink-600"><span>Enter to send · Shift + Enter for a new line</span>{input.length > 800 && <span>{input.length}/1000</span>}</div>
+              {!leftRoom && !canChat && <p className="mb-1.5 text-center text-xs text-ink-600">{status === 'connected' ? (others > 0 ? 'Finding a different person…' : 'Messages unlock when someone joins.') : 'Connecting securely…'}</p>}
+              <div className={`flex items-end gap-2 rounded-[22px] border bg-canvas p-1.5 pl-3 sm:p-2 sm:pl-4 transition-all focus-within:border-dusk-500 focus-within:ring-2 focus-within:ring-dusk-500/20 ${canChat ? 'border-line-200' : 'border-line-200 opacity-60'}`}><label htmlFor="peer-input" className="sr-only">Type your message</label><textarea id="peer-input" ref={textareaRef} rows={1} value={input} onChange={event => updateInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send(); } }} placeholder={canChat ? `Message ${matchedPeer?.nickname}…` : leftRoom ? 'Rejoin to start talking' : 'Waiting for a match…'} autoComplete="off" maxLength={1000} disabled={!canChat} className="max-h-32 sm:max-h-40 flex-1 resize-none bg-transparent py-1.5 sm:py-2 text-sm sm:text-[15px] leading-relaxed text-ink-900 placeholder:text-ink-600/60 focus:outline-none disabled:cursor-not-allowed" /><button type="submit" className="flex h-9 w-9 sm:h-11 sm:w-11 flex-shrink-0 items-center justify-center rounded-full bg-dusk-700 text-white transition-colors hover:bg-dusk-500 disabled:bg-dusk-200" disabled={!canChat || !input.trim()} aria-label="Send message"><SendIcon className="h-4 w-4 sm:h-5 sm:w-5" /></button></div>
+              <div className="mt-1 flex items-center justify-between px-1 text-[10px] text-ink-600"><span>Enter to send · Shift + Enter for a new line</span>{input.length > 800 && <span>{input.length}/1000</span>}</div>
             </div>
           </form>
         </section>

@@ -140,8 +140,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatSession, onSendMessage, isL
   const showQuickReplies = !!chatSession && chatSession.messages.filter(m => m.role === 'user').length === 0;
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
+    <div className="flex flex-col h-full min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0 p-3 sm:p-6 overflow-y-auto">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-ink-600">
             <BreathingCircle size={56} tone="sage" />
@@ -170,12 +170,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatSession, onSendMessage, isL
         )}
       </div>
 
-      <div className="border-t border-line-200 bg-canvas">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-3 pb-4">
+      <div className="flex-shrink-0 border-t border-line-200 bg-canvas">
+        <div className="max-w-3xl mx-auto px-3 sm:px-6 pt-2.5 pb-3 sm:pb-4">
           {showQuickReplies && (
-            <div className="flex flex-wrap gap-2 mb-3" aria-label="Common ways to start">
+            <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2 sm:mb-3" aria-label="Common ways to start">
               {QUICK_REPLIES.map(q => (
-                <button key={q} onClick={() => onSendMessage(q)} className="chip text-sm">
+                <button key={q} onClick={() => onSendMessage(q)} className="chip text-xs sm:text-sm py-1 px-2.5">
                   {q}
                 </button>
               ))}
@@ -186,7 +186,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatSession, onSendMessage, isL
               e.preventDefault();
               send();
             }}
-            className="flex items-end gap-2 bg-surface border border-line-200 rounded-[26px] shadow-soft pl-5 pr-2 py-2 transition-shadow duration-200 focus-within:ring-2 focus-within:ring-sage-700/40 focus-within:border-sage-500/50"
+            className="flex items-end gap-2 bg-surface border border-line-200 rounded-[26px] shadow-soft pl-4 pr-1.5 py-1.5 sm:pl-5 sm:pr-2 sm:py-2 transition-shadow duration-200 focus-within:ring-2 focus-within:ring-sage-700/40 focus-within:border-sage-500/50"
           >
             <label htmlFor="chat-input" className="sr-only">
               Type your message
@@ -200,18 +200,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatSession, onSendMessage, isL
               onKeyDown={handleKeyDown}
               placeholder="Type your message here…"
               autoComplete="off"
-              className="flex-1 resize-none bg-transparent py-2 text-ink-900 placeholder:text-ink-600/60 focus:outline-none leading-relaxed max-h-40"
+              className="flex-1 resize-none bg-transparent py-1.5 sm:py-2 text-sm sm:text-base text-ink-900 placeholder:text-ink-600/60 focus:outline-none leading-relaxed max-h-32 sm:max-h-40"
             />
             <button
               type="submit"
-              className="p-3 rounded-full bg-sage-500 text-white hover:bg-sage-700 disabled:bg-sage-200 transition-colors flex-shrink-0"
+              className="p-2.5 sm:p-3 rounded-full bg-sage-500 text-white hover:bg-sage-700 disabled:bg-sage-200 transition-colors flex-shrink-0"
               disabled={!input.trim()}
               aria-label="Send message"
             >
-              <SendIcon className="w-5 h-5" />
+              <SendIcon className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </form>
-          <p className="text-xs text-ink-600/80 mt-2.5 text-center">{COPY.disclaimer}</p>
+          <p className="text-[11px] sm:text-xs text-ink-600/80 mt-2 text-center">{COPY.disclaimer}</p>
         </div>
       </div>
     </div>
