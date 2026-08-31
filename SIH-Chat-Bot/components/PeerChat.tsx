@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { PeerProfile } from '../types';
+import type { PeerProfile, ViewName } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { getPeerProfile, savePeerProfile } from '../services/storageService';
 import {
@@ -11,9 +11,13 @@ import {
 } from '../services/peerChatService';
 import { PEER_GUIDELINES } from '../content';
 import { BreathingCircle } from './design';
-import { ArrowRightIcon, CheckIcon, CloseIcon, FlagIcon, LockIcon, SendIcon } from './icons';
+import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, CloseIcon, FlagIcon, LockIcon, SendIcon } from './icons';
 
 type DisplayMessage = LivePeerMessage & { reported?: boolean };
+
+interface PeerChatProps {
+  onNavigate?: (view: ViewName) => void;
+}
 
 const PersonaBadge: React.FC<{ name: string; from: string; to: string; size?: number }> = ({
   name, from, to, size = 32,
@@ -27,10 +31,19 @@ const PersonaBadge: React.FC<{ name: string; from: string; to: string; size?: nu
   </span>
 );
 
-const Guidelines: React.FC<{ onAccept: () => void }> = ({ onAccept }) => (
+const Guidelines: React.FC<{ onAccept: () => void; onExit?: () => void }> = ({ onAccept, onExit }) => (
   <div className="mx-auto flex min-h-full max-w-4xl items-center px-4 py-8 sm:px-6">
     <div className="card-organic grid w-full overflow-hidden lg:grid-cols-[0.8fr_1.2fr]">
       <div className="relative overflow-hidden bg-gradient-to-br from-dusk-50 to-sage-50 p-7 sm:p-9">
+        {onExit && (
+          <button
+            onClick={onExit}
+            className="mb-4 inline-flex items-center gap-2 rounded-full border border-line-200 bg-surface px-3 py-1.5 text-xs font-medium text-ink-600 transition-colors hover:text-ink-900"
+          >
+            <ArrowLeftIcon className="h-4 w-4" />
+            <span>Exit to helloMind</span>
+          </button>
+        )}
         <span className="absolute -right-16 -top-20 h-48 w-48 rounded-full bg-dusk-200/30 blur-3xl" aria-hidden="true" />
         <div className="relative"><span className="flex h-14 w-14 items-center justify-center rounded-organic bg-surface text-dusk-700 shadow-soft"><LockIcon className="h-6 w-6" /></span><p className="mt-8 text-xs font-medium uppercase tracking-[0.16em] text-dusk-700">Anonymous peer chat</p><h1 className="mt-2 font-display text-3xl font-medium leading-tight text-ink-900">A conversation without profiles or pressure</h1><p className="mt-3 text-sm leading-relaxed text-ink-600">You will receive a random garden identity. Share only what feels comfortable.</p>
           <div className="mt-8 space-y-3 text-sm text-ink-600"><p className="flex items-center gap-2"><CheckIcon className="h-4 w-4 text-sage-700" />Random one-to-one matching</p><p className="flex items-center gap-2"><CheckIcon className="h-4 w-4 text-sage-700" />No permanent chat history</p><p className="flex items-center gap-2"><CheckIcon className="h-4 w-4 text-sage-700" />Leave or change person anytime</p></div>
@@ -55,7 +68,7 @@ const statusCopy = (status: PeerConnectionStatus, others: number, matchedPeer: M
   return 'Finding someone new…';
 };
 
-const PeerChat: React.FC = () => {
+const PeerChat: React.FC<PeerChatProps> = ({ onNavigate }) => {
   const { user } = useAuth();
   const [profile, setProfile] = useState<PeerProfile | null>(null);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
@@ -137,11 +150,16 @@ const PeerChat: React.FC = () => {
 
   if (!user || !profile) return null;
   if (!profile.seenGuidelines) {
-    return <Guidelines onAccept={() => {
-      const updated = { ...profile, seenGuidelines: true };
-      savePeerProfile(user.id, updated);
-      setProfile(updated);
-    }} />;
+    return (
+      <Guidelines
+        onExit={() => onNavigate?.('home')}
+        onAccept={() => {
+          const updated = { ...profile, seenGuidelines: true };
+          savePeerProfile(user.id, updated);
+          setProfile(updated);
+        }}
+      />
+    );
   }
 
   const send = (suggested?: string) => {
@@ -178,6 +196,11 @@ const PeerChat: React.FC = () => {
     setInput('');
   };
 
+  const exitRoom = () => {
+    leave();
+    onNavigate?.('home');
+  };
+
   const nextPerson = () => {
     if (!matchedPeer) return;
     clientRef.current?.setTyping(false);
@@ -199,11 +222,22 @@ const PeerChat: React.FC = () => {
           <div><p className="text-xs font-medium uppercase tracking-[0.16em] text-dusk-700">Anonymous space</p><h1 className="mt-1 font-display text-2xl text-ink-900">Peer chat</h1><p className="mt-2 text-sm leading-relaxed text-ink-600">A private, one-to-one conversation with another student.</p></div>
           <div className="mt-7 rounded-soft border border-dusk-200 bg-surface p-4"><p className="text-xs text-ink-600">You appear as</p><div className="mt-3 flex items-center gap-3"><PersonaBadge name={profile.nickname} from={profile.colorFrom} to={profile.colorTo} size={40} /><div className="min-w-0"><p className="truncate text-sm font-medium text-ink-900">{profile.nickname}</p><p className="text-xs text-ink-600">Garden identity</p></div></div></div>
           <div className="mt-5 space-y-3 text-xs text-ink-600"><p className="flex items-center gap-2"><LockIcon className="h-4 w-4 text-sage-700" />Messages are not saved</p><p className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${status === 'connected' ? 'bg-sage-500' : 'bg-honey-500 animate-pulse'}`} />{status === 'connected' ? `${online} online now` : 'Connecting to room'}</p><p className="flex items-center gap-2"><FlagIcon className="h-4 w-4 text-coral-500" />Report any unsafe message</p></div>
-          <div className="mt-auto space-y-2 pt-6">{!leftRoom && matchedPeer && <button onClick={nextPerson} className="btn-secondary w-full text-sm"><ArrowRightIcon className="h-4 w-4" />Next person</button>}{leftRoom ? <button onClick={() => setLeftRoom(false)} className="btn-primary w-full text-sm">Rejoin room</button> : <button onClick={leave} className="btn-ghost w-full text-sm"><CloseIcon className="h-4 w-4" />Leave quietly</button>}</div>
+          <div className="mt-auto space-y-2 pt-6">
+            {!leftRoom && matchedPeer && <button onClick={nextPerson} className="btn-secondary w-full text-sm"><ArrowRightIcon className="h-4 w-4" />Next person</button>}
+            {leftRoom ? <button onClick={() => setLeftRoom(false)} className="btn-primary w-full text-sm">Rejoin room</button> : <button onClick={leave} className="btn-ghost w-full text-sm"><CloseIcon className="h-4 w-4" />Leave quietly</button>}
+            <button onClick={exitRoom} className="btn-ghost w-full text-sm flex items-center justify-center gap-2 text-ink-600 hover:text-ink-900">
+              <ArrowLeftIcon className="h-4 w-4" />
+              Exit to helloMind
+            </button>
+          </div>
         </aside>
 
         <section className="flex min-w-0 flex-1 flex-col">
           <header className="flex min-h-16 items-center gap-3 border-b border-line-200 bg-surface px-4 py-3 sm:px-6">
+            <button onClick={exitRoom} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-line-200 bg-canvas text-xs font-medium text-ink-600 hover:text-ink-900 hover:border-sage-500 transition-colors" title="Exit full screen anonymous chat">
+              <ArrowLeftIcon className="h-4 w-4" />
+              <span>Exit</span>
+            </button>
             {matchedPeer ? <PersonaBadge name={matchedPeer.nickname} from={matchedPeer.colorFrom} to={matchedPeer.colorTo} size={40} /> : <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-dusk-100"><LockIcon className="h-4 w-4 text-dusk-700" /><span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-surface ${status === 'connected' ? 'bg-sage-500' : 'bg-honey-500 animate-pulse'}`} /></span>}
             <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><h2 className="truncate text-sm font-medium text-ink-900">{matchedPeer?.nickname ?? 'Anonymous peer chat'}</h2>{matchedPeer && <span className="hidden rounded-full bg-sage-100 px-2 py-0.5 text-[10px] font-medium text-sage-700 sm:inline">Connected</span>}</div><p className="truncate text-xs text-ink-600">{presenceText}{status === 'connected' && !matchedPeer ? ` · ${online} online` : ''}</p></div>
             {!leftRoom && matchedPeer && <button onClick={nextPerson} className="btn-secondary px-3 py-2 text-xs lg:hidden" title="Find a different person"><ArrowRightIcon className="h-4 w-4" /><span className="hidden sm:inline">Next</span></button>}
@@ -217,7 +251,17 @@ const PeerChat: React.FC = () => {
               {roomNotice && !roomError && matchedPeer && <p className="mb-5 text-center text-xs text-ink-600">{roomNotice}</p>}
 
               {messages.length === 0 && <div className="flex min-h-[340px] flex-col items-center justify-center text-center animate-rise">
-                {leftRoom ? <><span className="flex h-16 w-16 items-center justify-center rounded-full bg-sage-100 text-sage-700"><LockIcon className="h-7 w-7" /></span><h3 className="mt-5 font-display text-2xl text-ink-900">Conversation ended</h3><p className="mt-2 max-w-sm text-sm leading-relaxed text-ink-600">Nothing from that conversation was saved. Rejoin whenever you feel ready.</p><button onClick={() => setLeftRoom(false)} className="btn-primary mt-5 lg:hidden">Rejoin the room</button></> : status === 'connecting' || status === 'reconnecting' ? <><BreathingCircle size={64} tone="dusk" /><h3 className="mt-5 font-display text-2xl text-ink-900">{presenceText}</h3><p className="mt-2 text-sm text-ink-600">Setting up a private live connection.</p></> : matchedPeer ? <><PersonaBadge name={matchedPeer.nickname} from={matchedPeer.colorFrom} to={matchedPeer.colorTo} size={64} /><h3 className="mt-5 font-display text-2xl text-ink-900">You matched with {matchedPeer.nickname}</h3><p className="mt-2 max-w-sm text-sm leading-relaxed text-ink-600">Be kind, protect your identity, and share only what feels comfortable.</p><div className="mt-6 flex max-w-lg flex-wrap justify-center gap-2">{starters.map(starter => <button key={starter} onClick={() => send(starter)} className="chip bg-surface px-3 py-2 text-xs">{starter}</button>)}</div></> : others === 0 ? <><span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-dusk-100"><LockIcon className="h-7 w-7 text-dusk-700" /><span className="absolute -right-1 top-1 h-4 w-4 rounded-full border-2 border-surface bg-honey-500 animate-pulse" /></span><h3 className="mt-5 font-display text-2xl text-ink-900">You are first in the room</h3><p className="mt-2 max-w-sm text-sm leading-relaxed text-ink-600">Stay here if you would like. Matching starts automatically when another student comes online.</p><span className="mt-5 rounded-full border border-dusk-200 bg-surface px-4 py-2 text-xs font-medium text-dusk-700">Waiting for someone…</span></> : <><BreathingCircle size={64} tone="dusk" /><h3 className="mt-5 font-display text-2xl text-ink-900">Finding a new match</h3><p className="mt-2 max-w-sm text-sm text-ink-600">{others} other {others === 1 ? 'student is' : 'students are'} online.</p></>}
+                {leftRoom ? (
+                  <>
+                    <span className="flex h-16 w-16 items-center justify-center rounded-full bg-sage-100 text-sage-700"><LockIcon className="h-7 w-7" /></span>
+                    <h3 className="mt-5 font-display text-2xl text-ink-900">Conversation ended</h3>
+                    <p className="mt-2 max-w-sm text-sm leading-relaxed text-ink-600">Nothing from that conversation was saved. Rejoin whenever you feel ready.</p>
+                    <div className="mt-5 flex items-center gap-3">
+                      <button onClick={() => setLeftRoom(false)} className="btn-primary">Rejoin the room</button>
+                      <button onClick={exitRoom} className="btn-secondary">Exit to app</button>
+                    </div>
+                  </>
+                ) : status === 'connecting' || status === 'reconnecting' ? <><BreathingCircle size={64} tone="dusk" /><h3 className="mt-5 font-display text-2xl text-ink-900">{presenceText}</h3><p className="mt-2 text-sm text-ink-600">Setting up a private live connection.</p></> : matchedPeer ? <><PersonaBadge name={matchedPeer.nickname} from={matchedPeer.colorFrom} to={matchedPeer.colorTo} size={64} /><h3 className="mt-5 font-display text-2xl text-ink-900">You matched with {matchedPeer.nickname}</h3><p className="mt-2 max-w-sm text-sm leading-relaxed text-ink-600">Be kind, protect your identity, and share only what feels comfortable.</p><div className="mt-6 flex max-w-lg flex-wrap justify-center gap-2">{starters.map(starter => <button key={starter} onClick={() => send(starter)} className="chip bg-surface px-3 py-2 text-xs">{starter}</button>)}</div></> : others === 0 ? <><span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-dusk-100"><LockIcon className="h-7 w-7 text-dusk-700" /><span className="absolute -right-1 top-1 h-4 w-4 rounded-full border-2 border-surface bg-honey-500 animate-pulse" /></span><h3 className="mt-5 font-display text-2xl text-ink-900">You are first in the room</h3><p className="mt-2 max-w-sm text-sm leading-relaxed text-ink-600">Stay here if you would like. Matching starts automatically when another student comes online.</p><span className="mt-5 rounded-full border border-dusk-200 bg-surface px-4 py-2 text-xs font-medium text-dusk-700">Waiting for someone…</span></> : <><BreathingCircle size={64} tone="dusk" /><h3 className="mt-5 font-display text-2xl text-ink-900">Finding a new match</h3><p className="mt-2 max-w-sm text-sm text-ink-600">{others} other {others === 1 ? 'student is' : 'students are'} online.</p></>}
               </div>}
 
               {messages.map(message => {

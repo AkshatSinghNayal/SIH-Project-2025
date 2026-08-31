@@ -77,7 +77,7 @@ const AppContent: React.FC = () => {
           />
         );
       case 'peer':
-        return <PeerChat />;
+        return <PeerChat onNavigate={navigate} />;
       case 'assessment':
         return (
           <Assessment

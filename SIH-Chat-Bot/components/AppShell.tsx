@@ -130,6 +130,14 @@ const AppShell: React.FC<AppShellProps> = ({ activeView, onNavigate, children })
     </div>
   );
 
+  if (activeView === 'peer') {
+    return (
+      <div className="fixed inset-0 z-50 h-screen w-screen overflow-hidden bg-canvas">
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-canvas">
       {/* Desktop sidebar */}
