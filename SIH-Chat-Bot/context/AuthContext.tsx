@@ -2,6 +2,7 @@ import React from 'react';
 import { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { User } from '../types';
 import { fetchMeApi, loginApi, registerApi, logoutApi } from '../services/authService';
+import { seedDemoData } from '../services/storageService';
 
 interface AuthContextType {
   user: User | null;
@@ -9,6 +10,7 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<void>;
   signup: (username: string, password: string) => Promise<void>;
   loginAsGuest: () => void;
+  loginDemoUser: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -52,13 +54,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser({ id: 'guest', username: 'Guest', isGuest: true });
   }, []);
 
+  const loginDemoUser = async (): Promise<void> => {
+    let loggedUser: User | null = null;
+    try {
+      loggedUser = await loginApi('recruiter_demo', 'Recruiter@2025');
+    } catch {
+      try {
+        loggedUser = await registerApi('recruiter_demo', 'Recruiter@2025');
+      } catch {
+        loggedUser = { id: 'recruiter_demo', username: 'recruiter_demo' };
+      }
+    }
+    if (loggedUser) {
+      seedDemoData(loggedUser.id);
+      setUser(loggedUser);
+    }
+  };
+
   const logout = useCallback(async () => {
     await logoutApi();
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, signup, loginAsGuest, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, signup, loginAsGuest, loginDemoUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

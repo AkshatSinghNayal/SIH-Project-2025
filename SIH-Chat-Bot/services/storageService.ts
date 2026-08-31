@@ -207,3 +207,123 @@ export const deleteUserLocalData = (userId: string): void => {
   }
   reflectionKeys.forEach(key => localStorage.removeItem(key));
 };
+
+/* ------------------------- demo data seeding ------------------------- */
+
+export const seedDemoData = (userId: string): void => {
+  const dKey = (daysAgo: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const now = Date.now();
+
+  // 1. Mood entries (5 consecutive days for vibrant graph & 5-day streak)
+  const demoMoods: MoodEntry[] = [
+    { level: 4, date: dKey(0), ts: now },
+    { level: 4, date: dKey(1), ts: now - 86400000 },
+    { level: 3, date: dKey(2), ts: now - 86400000 * 2 },
+    { level: 5, date: dKey(3), ts: now - 86400000 * 3 },
+    { level: 4, date: dKey(4), ts: now - 86400000 * 4 },
+  ];
+  writeJSON(`${NS}:moods:${userId}`, demoMoods);
+
+  // 2. Task completions & days
+  const demoTasks = {
+    'breathe-478': dKey(0),
+    'ground-54321': dKey(0),
+    'focus-sprint': dKey(1),
+  };
+  writeJSON(`${NS}:tasks:${userId}`, demoTasks);
+  writeJSON(`${NS}:task-days:${userId}`, [dKey(0), dKey(1), dKey(2), dKey(3), dKey(4)]);
+
+  // 3. Assessment history
+  const demoAssessment: AssessmentResult = {
+    ts: now - 86400000,
+    score: 84,
+    maxScore: 100,
+    skipped: 0,
+    band: 'Balanced & Steady',
+  };
+  writeJSON(`${NS}:assessment:${userId}`, [demoAssessment]);
+
+  // 4. Personality result
+  const demoPersonality: PersonalityResult = {
+    ts: now - 172800000,
+    traits: {
+      mindfulness: 88,
+      resilience: 84,
+      emotionalAwareness: 90,
+      stressManagement: 82,
+    },
+  };
+  writeJSON(`${NS}:personality:${userId}`, [demoPersonality]);
+
+  // 5. Peer profile
+  writeJSON(`${NS}:peer:${userId}`, {
+    nickname: 'Emerald Fern',
+    colorFrom: '#6E8F7C',
+    colorTo: '#4E6B5B',
+    seenGuidelines: true,
+  });
+
+  // 6. AI Chat history
+  const demoChats: ChatSession[] = [
+    {
+      id: `chat_demo_1`,
+      title: 'Managing Exam Pressure & Focus',
+      createdAt: now - 3600000,
+      messages: [
+        {
+          role: 'model',
+          text: "Hello! I'm here to listen and support you. What's on your mind today?",
+          timestamp: now - 3600000,
+        },
+        {
+          role: 'user',
+          text: "I'm feeling a bit overwhelmed by the upcoming exam schedule and finding it hard to focus.",
+          timestamp: now - 3550000,
+        },
+        {
+          role: 'model',
+          text: "It is completely normal to feel that pressure when exams approach. Let's take a deep breath together. Have you tried breaking your study sessions into 25-minute focus sprints with 5-minute grounding breaks?",
+          timestamp: now - 3500000,
+        },
+        {
+          role: 'user',
+          text: "That sounds helpful! How should I pace my breaks?",
+          timestamp: now - 3450000,
+        },
+        {
+          role: 'model',
+          text: "During your 5-minute break, step away from screens, try the 4-7-8 breathing exercise, or stretch lightly. Remember, your productivity improves when your mind feels calm.",
+          timestamp: now - 3400000,
+        },
+      ],
+    },
+    {
+      id: `chat_demo_2`,
+      title: 'Evening Gratitude & Reflection',
+      createdAt: now - 86400000,
+      messages: [
+        {
+          role: 'model',
+          text: "Hello! How was your day today?",
+          timestamp: now - 86400000,
+        },
+        {
+          role: 'user',
+          text: "It went well! I completed my daily tasks and went for a refreshing 15-minute evening walk.",
+          timestamp: now - 86300000,
+        },
+        {
+          role: 'model',
+          text: "That is wonderful progress! Taking time for a walk and honoring your daily habits is a great way to build resilience. I'm proud of you!",
+          timestamp: now - 86200000,
+        },
+      ],
+    },
+  ];
+  writeJSON(`chats_${userId}`, demoChats);
+};

@@ -5,6 +5,17 @@ helloMind provides students a calm, private space to check in on their emotional
 
 ---
 
+## ⚡ Quick Demo Access (For Recruiters & Evaluators)
+
+You can explore the live application instantly with pre-populated demo data (mood streaks, AI chat history, assessment scores, and completed habit logs):
+
+- **One-Click Demo Access**: Click **`⚡ One-Click Demo Login`** on the sign-in screen.
+- **Manual Credentials**:
+  - **Username**: `recruiter_demo`
+  - **Password**: `Recruiter@2025`
+
+---
+
 ## 🌟 Key Features
 
 - **Secure JWT Authentication** — Production-grade authentication using HttpOnly cookies (`__Host-token` in production), timing-safe CSRF headers (`X-CSRF-Token`), password policies, bcrypt hashing, and automatic index synchronization (`User.syncIndexes()`).

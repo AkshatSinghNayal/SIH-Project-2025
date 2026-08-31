@@ -16,7 +16,7 @@ const Auth: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login, signup, loginAsGuest } = useAuth();
+  const { login, signup, loginAsGuest, loginDemoUser } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,7 +152,48 @@ const Auth: React.FC = () => {
             {isLogin ? 'New here? Create your space' : 'Already have a space? Sign in'}
           </button>
 
-          <div className="flex items-center gap-3 my-5" aria-hidden="true">
+          {/* Recruiter & Evaluator One-Click Demo Access */}
+          <div className="mt-5 rounded-organic border border-sage-300/80 bg-gradient-to-br from-sage-50 to-dusk-50 p-4 text-center shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wider text-sage-700">Recruiter & Evaluator Access</p>
+            <button
+              type="button"
+              onClick={async () => {
+                setError('');
+                setIsLoading(true);
+                try {
+                  await loginDemoUser();
+                } catch (e: any) {
+                  setError(e.message || 'Demo login failed');
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+              disabled={isLoading}
+              className="btn-primary w-full mt-2.5 bg-sage-700 hover:bg-sage-800 text-white flex items-center justify-center gap-2 shadow-soft transition-all"
+            >
+              <span>⚡ One-Click Demo Login</span>
+            </button>
+            <p className="text-[11px] text-ink-600 mt-2">
+              Instantly explores pre-filled mood streaks, AI conversations & habit logs.
+            </p>
+            <div className="mt-2.5 flex items-center justify-center gap-2 text-[11px] text-ink-700 bg-surface/90 rounded-soft py-1.5 px-3 border border-line-200">
+              <span>User: <strong className="text-sage-700 font-semibold">recruiter_demo</strong></span>
+              <span className="text-ink-300">•</span>
+              <span>Pass: <strong className="text-sage-700 font-semibold">Recruiter@2025</strong></span>
+              <button
+                type="button"
+                onClick={() => {
+                  setUsername('recruiter_demo');
+                  setPassword('Recruiter@2025');
+                }}
+                className="ml-1 text-[10px] font-medium text-dusk-700 underline hover:text-ink-900"
+              >
+                Auto-fill
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 my-4" aria-hidden="true">
             <span className="h-px flex-1 bg-line-200" />
             <span className="text-xs text-ink-600">or</span>
             <span className="h-px flex-1 bg-line-200" />
