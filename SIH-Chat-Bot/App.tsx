@@ -47,15 +47,55 @@ const GuestGate: React.FC = () => {
   );
 };
 
+const VALID_VIEWS: ViewName[] = [
+  'home',
+  'chat',
+  'peer',
+  'assessment',
+  'personality',
+  'tasks',
+  'community',
+  'profile',
+  'settings',
+  'resources',
+];
+
+const getViewFromHash = (): ViewName | null => {
+  const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+  return VALID_VIEWS.includes(hash as ViewName) ? (hash as ViewName) : null;
+};
+
 const AppContent: React.FC = () => {
   const { user, isLoading } = useAuth();
-  const [view, setView] = useState<ViewName>('home');
+  const [view, setView] = useState<ViewName>(() => getViewFromHash() || 'home');
   const [assessmentChatPrompt, setAssessmentChatPrompt] = useState<string | null>(null);
 
+  // Sync state with URL hash on browser Back/Forward (popstate & hashchange)
   useEffect(() => {
-    // Fresh session opens on home; guests land straight on the assessment.
-    setView(user?.isGuest ? 'assessment' : 'home');
-  }, [user?.id]);
+    const handleHashChange = () => {
+      const currentHashView = getViewFromHash();
+      if (currentHashView) {
+        setView(currentHashView);
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handleHashChange);
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('popstate', handleHashChange);
+    };
+  }, []);
+
+  // Set initial view on auth state change
+  useEffect(() => {
+    if (!user) return;
+    const initialView = user.isGuest ? 'assessment' : (getViewFromHash() || 'home');
+    setView(initialView);
+    if (!window.location.hash || getViewFromHash() !== initialView) {
+      window.history.replaceState(null, '', `#${initialView}`);
+    }
+  }, [user?.id, user?.isGuest]);
 
   if (isLoading) return <ScreenFallback />;
 
@@ -64,7 +104,12 @@ const AppContent: React.FC = () => {
   const isGuest = !!user.isGuest;
   const gated = isGuest && !GUEST_VIEWS.includes(view);
 
-  const navigate = (next: ViewName) => setView(next);
+  const navigate = (next: ViewName) => {
+    setView(next);
+    if (getViewFromHash() !== next) {
+      window.history.pushState({ view: next }, '', `#${next}`);
+    }
+  };
 
   const screen = () => {
     if (gated) return <GuestGate />;
